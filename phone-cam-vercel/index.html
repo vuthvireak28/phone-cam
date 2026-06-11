@@ -30,7 +30,7 @@
             <a id="phoneLink" target="_blank">Open Phone Camera Page</a>
             <a id="obsLink" target="_blank" class="gray">Open OBS Viewer Page</a>
 
-            <canvas id="qrCanvas"></canvas>
+            <img id="qrImg" style="margin-top:15px;background:white;padding:12px;border-radius:12px;width:230px;">
 
             <p class="small">Scan QR on iPhone for phone camera page. Use OBS Browser Source with the OBS viewer URL.</p>
             <p class="small" id="urls"></p>
@@ -67,7 +67,8 @@
 
             urls.innerHTML = `Phone: ${phoneUrl}<br><br>OBS: ${obsUrl}`;
 
-            QRCode.toCanvas(qrCanvas, phoneUrl, { width: 230, margin: 1 });
+            document.getElementById("qrImg").src =
+                "https://api.qrserver.com/v1/create-qr-code/?size=230x230&data=" + encodeURIComponent(phoneUrl);
         }
 
         function makeNewRoom() {
