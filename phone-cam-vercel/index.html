@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JUKER JORK Phone Camera</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        body { margin: 0; background: #050510; color: white; font-family: Arial, sans-serif; text-align: center; }
+        .box { max-width: 720px; margin: 0 auto; padding: 24px; }
+        h1 { margin-bottom: 5px; }
+        .card { background: #111122; border: 1px solid #7c3aed; box-shadow: 0 0 22px rgba(124, 58, 237, 0.35); border-radius: 16px; padding: 18px; margin-top: 16px; }
+        a, button { display: block; width: 100%; box-sizing: border-box; margin-top: 12px; padding: 14px; border-radius: 12px; border: 0; background: #7c3aed; color: white; font-weight: bold; font-size: 16px; text-decoration: none; }
+        .gray { background: #334155; }
+        input { width: 100%; box-sizing: border-box; padding: 13px; border-radius: 10px; border: 1px solid #7c3aed; background: #050510; color: white; font-size: 16px; text-align: center; }
+        canvas { margin-top: 15px; background: white; padding: 12px; border-radius: 12px; max-width: 230px; width: 80%; }
+        .small { color: #c4b5fd; font-size: 14px; line-height: 1.5; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h1>JUKER JORK Phone Camera</h1>
+        <p class="small">Public phone camera to OBS using Vercel + Render + WebRTC.</p>
+
+        <div class="card">
+            <label>Room Code</label>
+            <input id="roomInput" />
+
+            <button onclick="makeNewRoom()">Generate New Room</button>
+
+            <a id="phoneLink" target="_blank">Open Phone Camera Page</a>
+            <a id="obsLink" target="_blank" class="gray">Open OBS Viewer Page</a>
+
+            <canvas id="qrCanvas"></canvas>
+
+            <p class="small">Scan QR on iPhone for phone camera page. Use OBS Browser Source with the OBS viewer URL.</p>
+            <p class="small" id="urls"></p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script>
+        const roomInput = document.getElementById("roomInput");
+        const phoneLink = document.getElementById("phoneLink");
+        const obsLink = document.getElementById("obsLink");
+        const qrCanvas = document.getElementById("qrCanvas");
+        const urls = document.getElementById("urls");
+
+        function randomRoom() {
+            return "juker-" + Math.random().toString(36).substring(2, 8);
+        }
+
+        function getRoomFromUrl() {
+            const params = new URLSearchParams(location.search);
+            return params.get("room") || localStorage.getItem("juker_room") || randomRoom();
+        }
+
+        function updateLinks() {
+            const room = roomInput.value.trim() || randomRoom();
+            localStorage.setItem("juker_room", room);
+
+            const base = location.origin;
+            const phoneUrl = `${base}/phone.html?room=${encodeURIComponent(room)}`;
+            const obsUrl = `${base}/obs.html?room=${encodeURIComponent(room)}&mirror=1&fit=contain&status=0`;
+
+            phoneLink.href = phoneUrl;
+            obsLink.href = obsUrl;
+
+            urls.innerHTML = `Phone: ${phoneUrl}<br><br>OBS: ${obsUrl}`;
+
+            QRCode.toCanvas(qrCanvas, phoneUrl, { width: 230, margin: 1 });
+        }
+
+        function makeNewRoom() {
+            roomInput.value = randomRoom();
+            updateLinks();
+        }
+
+        roomInput.value = getRoomFromUrl();
+        roomInput.addEventListener("input", updateLinks);
+        updateLinks();
+    </script>
+</body>
+</html>

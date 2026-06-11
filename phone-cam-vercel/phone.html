@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Phone Camera</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        html, body { margin: 0; padding: 0; background: #050510; color: white; font-family: Arial, sans-serif; text-align: center; }
+        .wrap { padding: 14px; }
+        video { width: 100%; max-width: 430px; background: black; border-radius: 14px; }
+        button, select { width: 90%; max-width: 430px; margin-top: 10px; padding: 14px; border: none; border-radius: 10px; font-size: 17px; font-weight: bold; }
+        button { background: #7c3aed; color: white; }
+        .red { background: #dc2626; }
+        select { background: white; color: black; }
+        .status { margin-top: 12px; color: #a78bfa; font-size: 14px; word-break: break-all; }
+        .black-mode { background: black !important; }
+        .black-mode .hide-in-black { display: none !important; }
+        .black-mode video { opacity: 0; }
+    </style>
+</head>
+<body>
+    <div class="wrap" id="wrap">
+        <h2 class="hide-in-black">JUKER JORK Phone Camera</h2>
+
+        <video id="localVideo" autoplay playsinline muted></video>
+
+        <select id="quality" class="hide-in-black">
+            <option value="480">480p Cool</option>
+            <option value="720" selected>720p Smooth</option>
+            <option value="1080">1080p High</option>
+        </select>
+
+        <button class="hide-in-black" onclick="startCamera()">Start Camera</button>
+        <button class="hide-in-black" onclick="switchCamera()">Switch Front / Back</button>
+        <button onclick="toggleBlackMode()">Black Screen Mode</button>
+        <button class="red hide-in-black" onclick="stopCamera()">Stop Camera</button>
+
+        <div class="status" id="status">Ready</div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="/config.js"></script>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const room = params.get("room") || "room1";
+
+        const socket = io(window.APP_CONFIG.SIGNAL_SERVER, { transports: ["websocket", "polling"] });
+
+        const localVideo = document.getElementById("localVideo");
+        const statusText = document.getElementById("status");
+        const qualitySelect = document.getElementById("quality");
+        const wrap = document.getElementById("wrap");
+
+        let localStream = null;
+        let facingMode = "environment";
+        let pc = null;
+        let blackMode = false;
+        let wakeLock = null;
+
+        function setStatus(text) { statusText.innerText = text; }
+
+        function createPeer() {
+            if (pc) pc.close();
+
+            pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: "stun:stun.l.google.com:19302" },
+                    { urls: "stun:stun1.l.google.com:19302" }
+                ]
+            });
+
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit("ice", { room, candidate: event.candidate });
+                }
+            };
+        }
+
+        async function requestWakeLock() {
+            try {
+                if ("wakeLock" in navigator) {
+                    wakeLock = await navigator.wakeLock.request("screen");
+                }
+            } catch (error) {
+                console.log("Wake lock error:", error);
+            }
+        }
+
+        socket.on("connect", () => {
+            socket.emit("join", { room, role: "phone" });
+            setStatus("Connected. Room: " + room);
+        });
+
+        socket.on("viewer-ready", async () => {
+            if (localStream) await sendOffer();
+        });
+
+        socket.on("answer", async (answer) => {
+            try {
+                await pc.setRemoteDescription(answer);
+                setStatus("Camera connected to OBS / PC");
+            } catch (error) {
+                console.log(error);
+            }
+        });
+
+        socket.on("ice", async (candidate) => {
+            try { await pc.addIceCandidate(candidate); } catch (error) { console.log(error); }
+        });
+
+        socket.on("disconnect", () => setStatus("Disconnected from server"));
+
+        function getConstraints() {
+            const quality = qualitySelect.value;
+
+            if (quality === "1080") {
+                return { video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30, max: 30 } }, audio: false };
+            }
+
+            if (quality === "720") {
+                return { video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } }, audio: false };
+            }
+
+            return { video: { facingMode, width: { ideal: 854 }, height: { ideal: 480 }, frameRate: { ideal: 24, max: 24 } }, audio: false };
+        }
+
+        async function startCamera() {
+            try {
+                stopTracksOnly();
+
+                localStream = await navigator.mediaDevices.getUserMedia(getConstraints());
+                localVideo.srcObject = localStream;
+
+                createPeer();
+
+                localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+
+                await sendOffer();
+                await requestWakeLock();
+
+                setStatus("Camera started. Keep Safari open.");
+            } catch (error) {
+                alert("Camera error: " + error.message);
+                setStatus("Camera error: " + error.message);
+                console.log(error);
+            }
+        }
+
+        async function sendOffer() {
+            if (!localStream || !pc) return;
+
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            socket.emit("offer", { room, offer });
+        }
+
+        async function switchCamera() {
+            facingMode = facingMode === "environment" ? "user" : "environment";
+            await startCamera();
+        }
+
+        function stopTracksOnly() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+        }
+
+        function stopCamera() {
+            stopTracksOnly();
+
+            if (pc) {
+                pc.close();
+                pc = null;
+            }
+
+            localVideo.srcObject = null;
+            setStatus("Camera stopped");
+        }
+
+        async function toggleBlackMode() {
+            blackMode = !blackMode;
+
+            if (blackMode) {
+                document.body.classList.add("black-mode");
+                wrap.classList.add("black-mode");
+                await requestWakeLock();
+                setStatus("Black mode ON. Do not close Safari.");
+            } else {
+                document.body.classList.remove("black-mode");
+                wrap.classList.remove("black-mode");
+                setStatus("Black mode OFF");
+            }
+        }
+
+        createPeer();
+    </script>
+</body>
+</html>
