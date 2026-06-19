@@ -5,15 +5,107 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <style>
-        body { margin: 0; background: #050510; color: white; font-family: Arial, sans-serif; text-align: center; }
-        .box { max-width: 720px; margin: 0 auto; padding: 24px; }
-        h1 { margin-bottom: 5px; }
-        .card { background: #111122; border: 1px solid #7c3aed; box-shadow: 0 0 22px rgba(124, 58, 237, 0.35); border-radius: 16px; padding: 18px; margin-top: 16px; }
-        a, button { display: block; width: 100%; box-sizing: border-box; margin-top: 12px; padding: 14px; border-radius: 12px; border: 0; background: #7c3aed; color: white; font-weight: bold; font-size: 16px; text-decoration: none; }
-        .gray { background: #334155; }
-        input { width: 100%; box-sizing: border-box; padding: 13px; border-radius: 10px; border: 1px solid #7c3aed; background: #050510; color: white; font-size: 16px; text-align: center; }
-        canvas { margin-top: 15px; background: white; padding: 12px; border-radius: 12px; max-width: 230px; width: 80%; }
-        .small { color: #c4b5fd; font-size: 14px; line-height: 1.5; word-break: break-all; }
+        body {
+            margin: 0;
+            background: #050510;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        .box {
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+        }
+
+        .card {
+            background: #111122;
+            border: 1px solid #7c3aed;
+            box-shadow: 0 0 22px rgba(124, 58, 237, 0.35);
+            border-radius: 16px;
+            padding: 18px;
+            margin-top: 16px;
+        }
+
+        label {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 13px;
+            border-radius: 10px;
+            border: 1px solid #7c3aed;
+            background: #050510;
+            color: white;
+            font-size: 16px;
+            text-align: center;
+            margin-top: 8px;
+        }
+
+        a, button {
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+            margin-top: 12px;
+            padding: 14px;
+            border-radius: 12px;
+            border: 0;
+            background: #7c3aed;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .gray {
+            background: #334155;
+        }
+
+        .green {
+            background: #16a34a;
+        }
+
+        .red {
+            background: #dc2626;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        img {
+            margin-top: 15px;
+            background: white;
+            padding: 12px;
+            border-radius: 12px;
+            width: 230px;
+            max-width: 80%;
+        }
+
+        .small {
+            color: #c4b5fd;
+            font-size: 14px;
+            line-height: 1.5;
+            word-break: break-all;
+        }
+
+        .toast {
+            margin-top: 10px;
+            color: #22c55e;
+            font-weight: bold;
+            min-height: 22px;
+        }
     </style>
 </head>
 <body>
@@ -27,23 +119,40 @@
 
             <button onclick="makeNewRoom()">Generate New Room</button>
 
+            <button id="mirrorBtn" class="green" onclick="toggleMirror()">
+                Camera Mirror: ON
+            </button>
+
             <a id="phoneLink" target="_blank">Open Phone Camera Page</a>
             <a id="obsLink" target="_blank" class="gray">Open OBS Viewer Page</a>
 
-            <img id="qrImg" style="margin-top:15px;background:white;padding:12px;border-radius:12px;width:230px;">
+            <div class="row">
+                <button onclick="copyPhoneLink()">Copy Phone Link</button>
+                <button onclick="copyObsLink()">Copy OBS Link</button>
+            </div>
 
-            <p class="small">Scan QR on iPhone for phone camera page. Use OBS Browser Source with the OBS viewer URL.</p>
+            <img id="qrImg" alt="QR Code">
+
+            <p class="small">
+                Scan QR on iPhone for phone camera page. Use OBS Browser Source with the OBS viewer URL.
+            </p>
+
             <p class="small" id="urls"></p>
+
+            <div class="toast" id="toast"></div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script>
         const roomInput = document.getElementById("roomInput");
         const phoneLink = document.getElementById("phoneLink");
         const obsLink = document.getElementById("obsLink");
-        const qrCanvas = document.getElementById("qrCanvas");
+        const qrImg = document.getElementById("qrImg");
         const urls = document.getElementById("urls");
+        const mirrorBtn = document.getElementById("mirrorBtn");
+        const toast = document.getElementById("toast");
+
+        let mirrorOn = localStorage.getItem("juker_mirror") !== "0";
 
         function randomRoom() {
             return "juker-" + Math.random().toString(36).substring(2, 8);
@@ -54,26 +163,85 @@
             return params.get("room") || localStorage.getItem("juker_room") || randomRoom();
         }
 
-        function updateLinks() {
+        function showToast(text) {
+            toast.innerText = text;
+
+            setTimeout(() => {
+                toast.innerText = "";
+            }, 1800);
+        }
+
+        function getLinks() {
             const room = roomInput.value.trim() || randomRoom();
-            localStorage.setItem("juker_room", room);
-
             const base = location.origin;
-            const phoneUrl = `${base}/phone.html?room=${encodeURIComponent(room)}`;
-            const obsUrl = `${base}/obs.html?room=${encodeURIComponent(room)}&mirror=1&fit=contain&status=0`;
 
-            phoneLink.href = phoneUrl;
-            obsLink.href = obsUrl;
+            const phoneUrl =
+                `${base}/phone.html?room=${encodeURIComponent(room)}`;
 
-            urls.innerHTML = `Phone: ${phoneUrl}<br><br>OBS: ${obsUrl}`;
+            const obsUrl =
+                `${base}/obs.html?room=${encodeURIComponent(room)}&mirror=${mirrorOn ? "1" : "0"}&fit=contain&status=0`;
 
-            document.getElementById("qrImg").src =
-                "https://api.qrserver.com/v1/create-qr-code/?size=230x230&data=" + encodeURIComponent(phoneUrl);
+            return {
+                room,
+                phoneUrl,
+                obsUrl
+            };
+        }
+
+        function updateLinks() {
+            const data = getLinks();
+
+            localStorage.setItem("juker_room", data.room);
+            localStorage.setItem("juker_mirror", mirrorOn ? "1" : "0");
+
+            phoneLink.href = data.phoneUrl;
+            obsLink.href = data.obsUrl;
+
+            mirrorBtn.innerText = mirrorOn ? "Camera Mirror: ON" : "Camera Mirror: OFF";
+            mirrorBtn.className = mirrorOn ? "green" : "red";
+
+            urls.innerHTML = `
+                Phone: ${data.phoneUrl}<br><br>
+                OBS: ${data.obsUrl}
+            `;
+
+            qrImg.src =
+                "https://api.qrserver.com/v1/create-qr-code/?size=230x230&data=" +
+                encodeURIComponent(data.phoneUrl);
         }
 
         function makeNewRoom() {
             roomInput.value = randomRoom();
             updateLinks();
+        }
+
+        function toggleMirror() {
+            mirrorOn = !mirrorOn;
+            updateLinks();
+            showToast(mirrorOn ? "Mirror ON" : "Mirror OFF");
+        }
+
+        async function copyText(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                showToast("Copied!");
+            } catch (error) {
+                const temp = document.createElement("textarea");
+                temp.value = text;
+                document.body.appendChild(temp);
+                temp.select();
+                document.execCommand("copy");
+                document.body.removeChild(temp);
+                showToast("Copied!");
+            }
+        }
+
+        function copyPhoneLink() {
+            copyText(getLinks().phoneUrl);
+        }
+
+        function copyObsLink() {
+            copyText(getLinks().obsUrl);
         }
 
         roomInput.value = getRoomFromUrl();
